@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { combineConfidence, detectDate, isoToday, readSegment, readText, segmentText } from "@/lib/reader";
+import { combineConfidence, detectDate, isoToday, readSegment, readText, resolveDirection, segmentText } from "@/lib/reader";
 
 const CTX = {
   today: "2026-10-03",
@@ -243,5 +243,51 @@ describe("combineConfidence", () => {
       { confidence: 0, value: null },
     ]);
     expect(withMissing).toBe(1);
+  });
+});
+describe("resolveDirection", () => {
+  const unclear = { value: "unclear", confidence: 0, evidence: null } as const;
+  const outflow09 = { value: "outflow", confidence: 0.9, evidence: "paid" } as const;
+  const inflow09 = { value: "inflow", confidence: 0.9, evidence: "received" } as const;
+
+  it("lets the model rescue a direction the rules gave up on", () => {
+    // The defect this guards: the model is in the product precisely to decide
+    // "received refund 320" from "refund paid 320", so a rule result of
+    // "unclear" must not survive the model returning a definite answer.
+    expect(resolveDirection(unclear, { direction: "inflow", confidence: 0.81 })).toEqual({
+      value: "inflow",
+      confidence: 0.81,
+      evidence: "open-weight model",
+    });
+    expect(resolveDirection(unclear, { direction: "outflow", confidence: 0.7 }).value).toBe("outflow");
+  });
+
+  it("does not let a weaker model overrule a confident rule", () => {
+    expect(resolveDirection(outflow09, { direction: "inflow", confidence: 0.55 })).toEqual(outflow09);
+  });
+
+  it("overrules the rules when the model is at least as sure", () => {
+    expect(resolveDirection(outflow09, { direction: "inflow", confidence: 0.93 }).value).toBe("inflow");
+  });
+
+  it("keeps the rule direction when the model agrees, raising confidence", () => {
+    const agreed = resolveDirection(inflow09, { direction: "inflow", confidence: 0.88 });
+    expect(agreed.value).toBe("inflow");
+    expect(agreed.evidence).toBe("received");
+    expect(agreed.confidence).toBe(0.9);
+  });
+
+  it("never lets 'not-money' become a direction", () => {
+    expect(resolveDirection(unclear, { direction: "not-money", confidence: 0.99 }).value).toBe("unclear");
+    expect(resolveDirection(outflow09, { direction: "not-money", confidence: 0.99 }).value).toBe("outflow");
+  });
+
+  it("really is the unclear case the rules cannot solve", () => {
+    // Guard the premise: if the rules ever learn these, the model stops being
+    // load-bearing for them and the copy in the UI is stale.
+    for (const text of ["wifi seller refunded me 320", "320 refunded to my account"]) {
+      expect(dir(readSegment(text, CTX)), text).toBe("unclear");
+      expect(readSegment(text, CTX).amountMinor.value, text).toBe(32000);
+    }
   });
 });

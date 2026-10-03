@@ -229,6 +229,46 @@ function detectDirection(text: string): ReadField<ReadDirection> {
   return field<ReadDirection>("unclear", 0, null);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Reconciling the rule engine with the open-weight model                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Decide which engine's answer to a payment's direction survives.
+ *
+ * The rules and the model are not equal partners, and the asymmetry matters:
+ * the rules are cheap, instant and right most of the time, so the model only
+ * earns an override in two situations.
+ *
+ * 1. The rules gave up. `unclear` is not a weak answer, it is the absence of
+ *    one, and "someone paid money out" versus "money came in" is exactly the
+ *    pair the rules cannot separate without more words than the message has.
+ *    Here the model decides outright — otherwise the model could never do the
+ *    one job it exists for.
+ * 2. The rules were confident but the model is *at least as confident* and
+ *    disagrees. A weaker guess does not get to overrule a stronger one.
+ *
+ * `not-money` never overrides: it is the model declining to classify, which is
+ * not evidence about direction.
+ */
+export function resolveDirection(
+  rule: ReadField<ReadDirection>,
+  model: { direction: "outflow" | "inflow" | "not-money"; confidence: number },
+): ReadField<ReadDirection> {
+  const decided =
+    model.direction === "inflow" || model.direction === "outflow" ? model.direction : null;
+  if (decided === null) {
+    return { ...rule, confidence: Math.max(rule.confidence, model.confidence) };
+  }
+
+  const rulesGaveUp = rule.value === "unclear";
+  const modelAtLeastAsSure = model.confidence >= rule.confidence;
+
+  return rulesGaveUp || modelAtLeastAsSure
+    ? { value: decided, confidence: model.confidence, evidence: "open-weight model" }
+    : { ...rule, confidence: Math.max(rule.confidence, model.confidence) };
+}
+
 /**
  * Who paid, and who the cost lands on.
  *
@@ -509,7 +549,7 @@ export function readSegment(text: string, ctx: ReadContext): ReadCandidate {
   if (category.value === null) caveats.push("No category matched, so it will file under Other.");
   if (ctx.memberNames.length === 0) caveats.push("This household has no members yet.");
 
-  return {
+  const candidate: ReadCandidate = {
     text,
     direction,
     amountMinor,
@@ -521,6 +561,45 @@ export function readSegment(text: string, ctx: ReadContext): ReadCandidate {
     confidence,
     engine,
     ready: amountMinor.value !== null && direction.value !== "unclear",
+    caveats,
+  };
+
+  return summariseRead(candidate);
+}
+
+/**
+ * Recompute everything that depends on a candidate's field values.
+ *
+ * Kept separate from `readSegment` because a candidate's fields are not written
+ * once and never touched: the browser model rewrites `direction` later, and any
+ * figure cached alongside it — the headline confidence, whether the row is
+ * writable, the caveats shown under it — is stale the moment that happens.
+ * Recomputing in one place is what keeps a model-corrected row honest.
+ */
+export function summariseRead(c: ReadCandidate): ReadCandidate {
+  const confidence = combineConfidence([
+    { confidence: c.amountMinor.confidence, value: c.amountMinor.value },
+    { confidence: c.direction.confidence, value: c.direction.value === "unclear" ? null : c.direction.value },
+    { confidence: c.occurredOn.confidence, value: c.occurredOn.value },
+    { confidence: c.paidBy.confidence, value: c.paidBy.value },
+    { confidence: c.participants.confidence, value: c.participants.value },
+    { confidence: c.category.confidence, value: c.category.value },
+  ]);
+
+  const caveats: string[] = [];
+  if (c.direction.value === "unclear") caveats.push("Could not tell which way the money moved.");
+  if (c.amountMinor.value === null) caveats.push("No amount found in this line.");
+  if (c.occurredOn.value === null) caveats.push("No date found, so today is assumed.");
+  if (c.paidBy.value === null) caveats.push("Could not tell who paid.");
+  if (c.category.value === null) caveats.push("No category matched, so it will file under Other.");
+  if (!c.participants.value || c.participants.value.length === 0) {
+    caveats.push("This household has no members yet.");
+  }
+
+  return {
+    ...c,
+    confidence,
+    ready: c.amountMinor.value !== null && c.direction.value !== "unclear",
     caveats,
   };
 }

@@ -27,6 +27,12 @@ believed.
 
 There is **no account, no API key and no install**. The book belongs to the browser you open it in.
 
+<img src="docs/images/reader-model.png" alt="The reader with the open-weight model loaded: two pasted lines, one badged 'model' at 59% with the NLI probability spread shown, one still badged 'rules'. The model-resolved line is now selectable and no longer flagged as unreadable." width="900" />
+
+<sub>The reader with `Xenova/mobilebert-uncased-mnli` loaded and running locally. Captured by
+`e2e/model.spec.ts` — the same run that asserts the model answered `inflow`, that the row became
+writable, and that the line the rules already read at 0.90 was left alone.</sub>
+
 ---
 
 ## ✨ Features
@@ -80,13 +86,27 @@ needs a key.
 ```bash
 npm run typecheck   # tsc --noEmit, strict
 npm run lint        # eslint
-npm test            # 145 unit and integration tests (vitest)
+npm test            # 151 unit and integration tests (vitest)
 npm run build       # production build
 npm run check       # all four in sequence
 
 npm run build && npm run start   # then, in another shell:
 npm run test:e2e                  # Playwright: the primary journey in a real browser
 ```
+
+The browser suite also contains one test that is **skipped by default**: it downloads the real 28 MB
+of model weights and runs inference in Chromium, which makes the run depend on the Hugging Face CDN.
+Run it on purpose, against a fresh build so you are testing what would actually ship:
+
+```bash
+npm run build
+KHATA_MODEL_E2E=1 npx playwright test e2e/model.spec.ts   # macOS/Linux
+$env:KHATA_MODEL_E2E="1"; npx playwright test e2e/model.spec.ts   # PowerShell
+```
+
+It takes a couple of minutes. It is the only thing in this repository that proves the open-weights
+model works rather than merely being wired up, and the screenshot near the top of this file is
+written by that run.
 
 ### Production environment variables
 
@@ -517,7 +537,7 @@ a ledger line.
 ```mermaid
 flowchart LR
   Push["push to main"] --> CI["GitHub Actions<br/>Node 22, npm ci"]
-  CI --> Gate["typecheck, lint,<br/>145 tests, build"]
+  CI --> Gate["typecheck, lint,<br/>151 tests, build"]
   Gate --> Deploy["Vercel production build"]
   Deploy --> Env["DATABASE_URL<br/>+ SITE_URL"]
   Env --> Health["/api/health must<br/>report neon-postgres"]

@@ -37,13 +37,25 @@ Where open was *worse*, honestly: an NLI model at 28 MB is a big thing to ask a 
 
 ### What the model is actually for
 
-Rules handle amounts, dates, payers and categories. Rules are bad at exactly one thing:
+Rules handle amounts, dates, payers and categories. For direction they score keywords, plus one special case I wrote by hand: a message containing "refund" is an inflow unless it also matches "paid".
 
-> `received refund 320` — money came in
-> `refund paid 320` — money went out
+That special case is exactly where a keyword list runs out of road. These are the measured confidences, not the ones I expected:
 
-Same words, opposite meaning. A keyword list has to guess. A zero-shot NLI model reads the whole sentence and hypothesises each direction, which is a job it was trained for. That is the whole open-model surface, and it is load-bearing.
+```
+received refund 320 from the wifi seller   inflow   0.90   correct
+refund paid 320 to the wifi seller         outflow  0.90   correct
+wifi seller refunded me 320                unclear  0.00   no answer
+320 refunded to my account                 unclear  0.00   no answer
+reimbursed 320 to the shop                 inflow   0.90   wrong
+```
 
+The first two I originally used as the example, because they are the pair that reads like it *must* need a model. The rules get them right anyway, at 0.90, so the model never runs on them at all. The line that genuinely needs it has no first-person marker and no payment verb — `wifi seller refunded me 320` — so the rules can only answer `unclear`, which leaves the row unwritable.
+
+A zero-shot NLI model reads the whole sentence and scores each direction hypothesis against it, which is the job it was trained for. On that line it answers **inflow at 84%**, against outflow 16%, and the row becomes writable.
+
+So the rule I settled on is deliberately narrow: the model decides only where the rules score below 0.80, and it may overrule a confident rule only when it is at least as confident itself. That keeps the cost honest — the 28 MB gets spent on the minority of lines that need it, not on every line that arrives.
+
+The proof is a real browser test, not a unit test with the model mocked. It downloads the weights, runs onnxruntime-web, and asserts the model answered `inflow`, that the row became writable, that its "could not tell which way the money moved" caveat disappeared, and that a line the rules already read at 0.90 came back still badged `rules` rather than being silently re-decided. It is skipped by default because a test run should not depend on a third-party CDN, and it is in `e2e/model.spec.ts` if you want to watch it happen.
 ---
 
 ## The four things it does
@@ -93,7 +105,7 @@ Every figure carries `live`, `stale` or `fallback` and a real as-of date. A seal
 
 ## What I got wrong, because the bugs are the interesting part
 
-Four defects only a real browser against a real production bundle could find. None were visible in the tests I wrote first.
+Six defects, and the last two only a real browser with the model actually running could find. None were visible in the tests I wrote first.
 
 **Six of nine pages returned 500 in production.** `cookies().set()` is illegal during render, so a Server Component that minted the anonymous scope took the page down. Fixed in the request proxy — and it writes the scope onto the *request* as a header as well as onto the *response*, or the first render and the browser disagree about which household you are in.
 
@@ -102,6 +114,10 @@ Four defects only a real browser against a real production bundle could find. No
 **The audit log was not owner-scoped.** `listAudit` took an optional chain id and nothing else, so an unscoped call returned the sealed history of *every household on the database*, with their members' names and amounts inside each event's payload. There are no accounts, so ownership is the only access control there is. The parameter is now required, and there is a regression test.
 
 **The schema ran on every request.** Fourteen idempotent `CREATE ... IF NOT EXISTS` statements meant fourteen round trips to Neon on every call. I found it by measuring, not by reading: a commit of six lines took 9s and now takes 2.9s.
+
+**The model could not do the one job it was in the app to do.** `runModel` overwrote a direction only when the rules had already produced a *definite* answer and disagreed. When the rules said `unclear` — which is the entire reason to reach for a model — the branch kept `unclear`, so a line the model had just answered stayed unanswered. The fix is a pure `resolveDirection(rule, model)`: the model decides outright when the rules gave up, and may only overrule a confident rule when it is at least as confident itself. Five unit tests, including one that fails if the rules ever learn those phrases, because then the copy on the page would be lying about what the model is for.
+
+**And when the model did answer, the row did not believe it.** A candidate's confidence, its "writable" flag and its caveat list were all computed once when the rules read the line and never recomputed, so after inference the row still showed `unclear`, still carried "could not tell which way the money moved", and left the checkbox disabled — the model had answered and the user still could not record the line. Those three figures are now derived in one place, `summariseRead`, and recomputed whenever a field changes.
 
 I also shipped a hydration mismatch for a while — `typeof window === "undefined"` is the first item on React's own list of causes, and my agent console had exactly that. It is now `useSyncExternalStore`, whose server snapshot makes the first client render agree by construction.
 
@@ -134,13 +150,14 @@ I will update the live link once the limit resets.
 ```
 typecheck   pass (strict, noUncheckedIndexedAccess)
 lint        pass
-tests       145 unit + integration, 5 files
+tests       151 unit + integration, 5 files
 build       pass
 browser     9/9 desktop (1440×900) and 9/9 mobile (Pixel 7), real Postgres, zero console errors
+model       real 28 MB download + onnxruntime-web inference in Chromium (opt-in spec)
 seal chain  replays clean; digests pinned to hand-computed vectors
 ```
 
-The browser suite walks the whole journey through visible controls — paste, read, correct, write, inspect, decide, stamp, agent mutation, read-back in the UI, idempotent retry, export, share, delete, replay — and **fails the run on any console error or server 5xx**. It caught all four bugs above.
+The browser suite walks the whole journey through visible controls — paste, read, correct, write, inspect, decide, stamp, agent mutation, read-back in the UI, idempotent retry, export, share, delete, replay — and **fails the run on any console error or server 5xx**. It caught the first four bugs above; the model spec caught the last two.
 
 ## Licence
 

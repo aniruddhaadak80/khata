@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Cpu, Download, Loader2, PenLine, Wand2 } from "lucide-react";
 import { api, errorText } from "@/lib/api";
-import { isoToday, readText } from "@/lib/reader";
+import { isoToday, readText, resolveDirection, summariseRead } from "@/lib/reader";
 import {
   MODEL_BYTES,
   classifyDirections,
@@ -150,18 +150,20 @@ export function ReaderConsole({ household }: { household: Household }) {
         prev.map((d) => {
           const c = byId.get(d.id);
           if (!c) return d;
-          const agrees = c.direction === d.direction.value;
+          // The model decides when the rules gave up, and only overrules a
+          // confident rule when it is at least as sure itself.
+          const resolved = summariseRead({ ...d, direction: resolveDirection(d.direction, c) });
           return {
-            ...d,
+            ...resolved,
+            id: d.id,
+            // A line the model just made readable becomes writable and joins
+            // the batch, exactly as it would have if the rules had read it.
+            selected: resolved.ready || d.selected,
+            directionOverride: d.directionOverride,
             engineUsed: "model",
             modelDirection: c.direction,
             modelConfidence: c.confidence,
             modelScores: c.scores,
-            // The model only overrides the rules where the rules were unsure.
-            direction:
-              agrees || c.direction === "not-money" || d.direction.value === "unclear"
-                ? { ...d.direction, confidence: Math.max(d.direction.confidence, c.confidence) }
-                : { value: c.direction, confidence: c.confidence, evidence: "open-weight model" },
           };
         }),
       );
