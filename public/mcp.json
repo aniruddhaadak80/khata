@@ -1,0 +1,93 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-06-18/server.schema.json",
+  "name": "io.github.aniruddhaadak80/khata",
+  "version": "1.0.0",
+  "description": "A shared household ledger. Reads payment messages, records ledger lines, confirms or disputes them, and computes who pays whom in the fewest possible transfers. Every write is sealed into a per-line SHA-384 chain that can be replayed.",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/aniruddhaadak80/khata",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "khata",
+      "version": "1.0.0",
+      "transport": {
+        "type": "streamable-http",
+        "url": "https://khata.vercel.app/api/mcp"
+      },
+      "runtimeHint": "nodejs",
+      "environmentVariables": []
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://khata.vercel.app/api/mcp"
+    }
+  ],
+  "tools": [
+    {
+      "name": "get_khata_summary",
+      "kind": "read",
+      "description": "The current household, its members, its line count and the latest settlement."
+    },
+    {
+      "name": "list_entries",
+      "kind": "read",
+      "description": "List ledger lines with filters for status, direction, category and member. Bounded at 100 rows."
+    },
+    {
+      "name": "get_entry",
+      "kind": "read",
+      "description": "One ledger line plus its full seal chain."
+    },
+    {
+      "name": "read_message",
+      "kind": "analysis",
+      "description": "Run the deterministic reader over messy payment text and return candidate ledger lines with per-field confidence and evidence."
+    },
+    {
+      "name": "analyse_settlement",
+      "kind": "analysis",
+      "description": "Balances, a provably minimum-transfer plan, six weighted trust factors with their evidence, flags and a recommendation."
+    },
+    {
+      "name": "record_entry",
+      "kind": "mutating",
+      "description": "Write one ledger line through the shared service layer. Converts at the live ECB rate, normalises the split and appends a sealed audit event. Supports idempotencyKey."
+    },
+    {
+      "name": "record_entries",
+      "kind": "mutating",
+      "description": "Commit up to 50 reader candidates at once, reporting partial success honestly."
+    },
+    {
+      "name": "decide_entry",
+      "kind": "mutating",
+      "description": "Confirm, dispute or edit a line. This is the step that changes who owes what, and it is sealed."
+    },
+    {
+      "name": "delete_entry",
+      "kind": "mutating",
+      "destructive": true,
+      "description": "Soft-delete a line, keeping a tombstone so its seal chain stays replayable."
+    },
+    {
+      "name": "export_statement",
+      "kind": "mutating",
+      "description": "Build the full settlement statement as JSON, with balances, transfers, factors, provenance and the seal."
+    },
+    {
+      "name": "create_share_link",
+      "kind": "mutating",
+      "description": "Mint an unguessable link that renders a read-only statement anyone with the URL can open."
+    }
+  ],
+  "_notes": {
+    "endpoint": "The URL in `packages[0].transport.url` is the live production alias. A preview deployment serves the same endpoint at its own origin.",
+    "handshake": "POST a JSON-RPC 2.0 `initialize`, then `notifications/initialized`, then `tools/list`. Call tools with `tools/call`.",
+    "scoping": "There are no accounts. Every call is scoped to the anonymous HTTP-only cookie session that first opened the site, so an agent must act inside the same browser session as the person whose ledger it is reading."
+  }
+}

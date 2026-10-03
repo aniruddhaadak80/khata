@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify the build did not quietly pick a local database
+        run: |
+          # A production build must not select the embedded adapter. The build
+          # already fails without a database in production mode, so this only
+          # has to confirm the artefact exists and that no secret leaked in.
+          test -d .next
+          if grep -rn "neon_ALjy4\|npg_\|postgresql://" --include='*.ts' --include='*.tsx' \
+               --include='*.json' --include='*.mjs' src/ public/ 2>/dev/null; then
+            echo "::error::A database connection string was found in the source tree."
+            exit 1
+          fi
+          echo "No connection string in the source tree."

@@ -1,0 +1,368 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   khata — visual identity
+   --------------------------------------------------------------------------
+   Identity: an indigo block-printed khata (account book) + ink-bleed and
+   stamp-press motion, because a shared household ledger is a physical object
+   people already know how to trust. Delta vs nightglass: an indigo dyed-cloth
+   ground with madder-red rules and turmeric accents over a ruled account-book
+   grid, rather than a verdigris observatory plate with instrument panels.
+   ========================================================================== */
+
+@theme {
+  /* Cloth: the dyed indigo the page is printed on. */
+  --color-cloth-900: #0d1730;
+  --color-cloth-800: #131f3f;
+  --color-cloth-700: #1b2b53;
+  --color-cloth-600: #26386a;
+  --color-cloth-400: #7c93d6;
+
+  /* Paper: aged rag for the readable surfaces. */
+  --color-rag-50: #fbf7ee;
+  --color-rag-100: #f4eee0;
+  --color-rag-200: #e8dfcb;
+  --color-rag-300: #d6c9ad;
+
+  /* Ink: the writing itself. */
+  --color-ink-900: #0b1226;
+  --color-ink-700: #25325a;
+  --color-ink-500: #4a5a86;
+  --color-ink-400: #6b7ba3;
+
+  /* Madder: the red of ledger rules and money leaving. */
+  --color-madder-600: #a83232;
+  --color-madder-500: #c03f3f;
+  --color-madder-200: #eec9c2;
+
+  /* Turmeric: money coming in. */
+  --color-turmeric-500: #d69412;
+  --color-turmeric-300: #f0cd76;
+
+  /* Moss: agreed and settled. */
+  --color-moss-600: #3d6b4f;
+  --color-moss-300: #a9c9b4;
+
+  --font-display: var(--font-newsreader), Georgia, serif;
+  --font-ui: var(--font-anek), system-ui, sans-serif;
+  --font-data: var(--font-azeret), ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: light;
+  --rule: color-mix(in srgb, var(--color-madder-600) 26%, transparent);
+  --rule-strong: color-mix(in srgb, var(--color-madder-600) 52%, transparent);
+}
+
+* {
+  border-color: var(--rule);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-rag-100);
+  color: var(--color-ink-900);
+  font-family: var(--font-ui);
+  font-feature-settings: "ss01";
+  min-height: 100dvh;
+}
+
+/* --------------------------------------------------------------------------
+   The block print. Two overlapping indigo cloth panels, as if the page were
+   stamped twice with a slightly offset block. Purely decorative, sits behind
+   everything, and is switched off entirely under reduced motion.
+   -------------------------------------------------------------------------- */
+
+.khata-cloth {
+  position: relative;
+  background-color: var(--color-cloth-800);
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0.028) 0 1px,
+      transparent 1px 3px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgb(0 0 0 / 0.05) 0 1px,
+      transparent 1px 4px
+    );
+}
+
+/* Ruled account-book paper: horizontal madder rules at a ledger rhythm. */
+.khata-rules {
+  background-image:
+    linear-gradient(to bottom, transparent 0 31px, var(--rule) 31px 32px),
+    linear-gradient(to right, transparent 0 63px, rgb(168 50 50 / 0.05) 63px 64px);
+  background-size: 100% 32px, 100% 100%;
+}
+
+.khata-margin {
+  position: relative;
+}
+
+/* The wide ledger margin down the left edge of a real account book. */
+.khata-margin::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--color-madder-500);
+  opacity: 0.55;
+}
+
+@media (min-width: 768px) {
+  .khata-margin::before {
+    width: 5px;
+  }
+}
+
+/* Punched holes and a perforation edge, for the carbon-copy feel. */
+.khata-perf {
+  background-image: radial-gradient(
+    circle at 0 50%,
+    color-mix(in srgb, var(--color-cloth-800) 85%, transparent) 3.5px,
+    transparent 4px
+  );
+  background-size: 12px 100%;
+  background-repeat: repeat-y;
+}
+
+.khata-stamp {
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: var(--font-data);
+}
+
+/* A pressed rubber stamp sits slightly rotated, like it was hit by hand. */
+.khata-stamp-pressed {
+  transform: rotate(-3.5deg);
+  opacity: 0.92;
+}
+
+/* --------------------------------------------------------------------------
+   Typography helpers
+   -------------------------------------------------------------------------- */
+
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+.font-data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small caps run-in label, the way a ledger heads each column. */
+.rubric {
+  font-family: var(--font-data);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+}
+
+/* --------------------------------------------------------------------------
+   Focus. Visible, madder, and never removed.
+   -------------------------------------------------------------------------- */
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-madder-600);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.on-cloth :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline-color: var(--color-turmeric-300);
+}
+
+/* --------------------------------------------------------------------------
+   Motion. Every animated behaviour has a static equivalent, and the visitor's
+   stated preference wins without exception.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   The ink bleed. A new ledger line arrives as pigment spreading into paper.
+   -------------------------------------------------------------------------- */
+
+@keyframes khata-bleed {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  60% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.khata-bleed {
+  animation: khata-bleed 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* The stamp press: a hard, short downstroke with a settle. */
+@keyframes khata-press {
+  0% {
+    transform: rotate(-3.5deg) scale(1.28);
+    opacity: 0;
+  }
+  55% {
+    transform: rotate(-3.5deg) scale(0.96);
+    opacity: 0.95;
+  }
+  100% {
+    transform: rotate(-3.5deg) scale(1);
+    opacity: 0.92;
+  }
+}
+
+.khata-press {
+  animation: khata-press 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* --------------------------------------------------------------------------
+   Utility surfaces
+   -------------------------------------------------------------------------- */
+
+.card {
+  background: var(--color-rag-50);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  box-shadow: 0 1px 0 rgb(11 18 38 / 0.05);
+}
+
+.card-cloth {
+  background: var(--color-cloth-700);
+  border: 1px solid color-mix(in srgb, var(--color-cloth-400) 26%, transparent);
+  border-radius: 2px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 2px;
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+  text-decoration: none;
+  min-height: 2.5rem;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.btn-primary {
+  background: var(--color-cloth-700);
+  color: var(--color-rag-50);
+  border-color: var(--color-cloth-900);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-cloth-600);
+}
+
+.btn-madder {
+  background: var(--color-madder-600);
+  color: #fff;
+  border-color: var(--color-madder-600);
+}
+
+.btn-madder:hover:not(:disabled) {
+  background: var(--color-madder-500);
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--color-ink-700);
+  border-color: var(--rule-strong);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-madder-600) 8%, transparent);
+}
+
+.on-cloth .btn-quiet {
+  color: var(--color-rag-100);
+  border-color: color-mix(in srgb, var(--color-cloth-400) 45%, transparent);
+}
+
+.on-cloth .btn-quiet:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-cloth-400) 14%, transparent);
+}
+
+.field {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  background: var(--color-rag-50);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  font-family: var(--font-ui);
+  font-size: 0.9375rem;
+  color: var(--color-ink-900);
+  min-height: 2.5rem;
+}
+
+.field::placeholder {
+  color: var(--color-ink-400);
+}
+
+.field[aria-invalid="true"] {
+  border-color: var(--color-madder-600);
+  border-width: 2px;
+}
+
+/* Skip link: visible the moment a keyboard user tabs. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.6rem 1rem;
+  background: var(--color-ink-900);
+  color: var(--color-rag-50);
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}
+
+/* Scrollbars, in the same cloth. */
+* {
+  scrollbar-color: var(--color-madder-500) var(--color-rag-200);
+  scrollbar-width: thin;
+}
