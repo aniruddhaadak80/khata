@@ -310,6 +310,56 @@ await check("15. the repository itself returns 200", async () => {
   return `HTTP ${res.status}`;
 });
 
+await check("16. the optional cloud tier reports its configuration honestly", async () => {
+  const status = await call("/api/reader/direction");
+  must(status.status === 200, `GET status ${status.status}`);
+  must(status.json?.ok === true, "GET did not return the ok envelope");
+
+  const data = status.json.data;
+  must(typeof data.configured === "boolean", "configured is not a boolean");
+  must(data.provider === "google", `provider was ${data.provider}`);
+  must(!JSON.stringify(data).includes("AIza"), "a key appeared in the status payload");
+
+  if (!data.configured) {
+    const refused = await call("/api/reader/direction", { method: "POST", body: { text: "wifi seller refunded me 320" } });
+    must(refused.status === 503, `an unconfigured tier answered POST with ${refused.status}`);
+    must(refused.json?.error?.code === "UNSUPPORTED", `code was ${refused.json?.error?.code}`);
+    return "not configured; the tier refuses rather than pretending";
+  }
+
+  must(typeof data.model === "string" && data.model.length > 0, "a configured tier named no model");
+
+  const health = await call("/api/health");
+  must(health.json?.data?.cloud?.configured === true, "/api/health does not agree the tier is configured");
+  must(health.json.data.cloud.model === data.model, "/api/health named a different model");
+  must(!JSON.stringify(health.json).includes("AIza"), "a key appeared in the health payload");
+  return `configured: ${data.model}; health agrees`;
+});
+
+await check("17. the hosted model answers a line the rules leave unclear", async () => {
+  const status = await call("/api/reader/direction");
+  if (status.json?.data?.configured !== true) {
+    return "skipped: this deployment offers no cloud tier, which is a passing state";
+  }
+
+  // The fixture the rule engine genuinely fails: confidences on this line are
+  // 0.00, which is the entire reason a third tier exists.
+  const text = "wifi seller refunded me 320";
+  const asked = await call("/api/reader/direction", { method: "POST", body: { text } });
+  must(
+    asked.status === 200,
+    `POST status ${asked.status}: ${asked.json?.error?.message ?? asked.text.slice(0, 160)}`,
+  );
+
+  const data = asked.json.data;
+  must(["inflow", "outflow", "not-money"].includes(data.direction), `direction was ${data.direction}`);
+  must(data.confidence > 0 && data.confidence <= 0.9, `confidence ${data.confidence} is outside (0, 0.9]`);
+  must(typeof data.model === "string" && data.model.length > 0, "no model was named");
+  must(data.latencyMs >= 0, "no latency was reported");
+  must(!JSON.stringify(asked.json).includes("AIza"), "a key appeared in the answer payload");
+  return `${data.direction} at ${Math.round(data.confidence * 100)}% from ${data.model} in ${data.latencyMs}ms`;
+});
+
 /* -------------------------------------------------------------------------- */
 
 const failed = results.filter((r) => !r.ok);

@@ -206,7 +206,7 @@ function schemaStatements(schema: string): string[] {
       CONSTRAINT entries_split_check CHECK (split_mode IN ('equal','exact')),
       CONSTRAINT entries_amount_positive CHECK (amount_minor > 0),
       CONSTRAINT entries_base_positive CHECK (amount_base_minor > 0),
-      CONSTRAINT entries_engine_check CHECK (parse_engine IN ('manual','deterministic','mobilebert-mnli','ollama','agent')),
+      CONSTRAINT entries_engine_check CHECK (parse_engine IN ('manual','deterministic','mobilebert-mnli','ollama','agent','gemini')),
       CONSTRAINT entries_evidence_check CHECK (evidence IN ('paste','sms','forward','manual','agent')),
       CONSTRAINT entries_confidence_range CHECK (parse_confidence BETWEEN 0 AND 1)
     )`,

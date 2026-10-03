@@ -116,7 +116,9 @@ export const createEntrySchema = z.object({
   note: z.string().trim().max(240, "note is too long").default(""),
   rawText: z.string().max(2000, "rawText is too long").default(""),
   evidence: z.enum(["paste", "sms", "forward", "manual", "agent"]).default("manual"),
-  parseEngine: z.enum(["manual", "deterministic", "mobilebert-mnli", "ollama", "agent"]).default("manual"),
+  parseEngine: z
+    .enum(["manual", "deterministic", "mobilebert-mnli", "ollama", "agent", "gemini"])
+    .default("manual"),
   parseConfidence: z.number().min(0).max(1).default(1),
   splitMode: z.enum(["equal", "exact"]).default("equal"),
   participants: z.array(memberIdSchema).min(1, "at least one member must bear this cost").max(12).optional(),
@@ -143,7 +145,9 @@ export const updateEntrySchema = z
     category: z.enum(CATEGORIES).optional(),
     note: z.string().trim().max(240, "note is too long").optional(),
     rawText: z.string().max(2000, "rawText is too long").optional(),
-    parseEngine: z.enum(["manual", "deterministic", "mobilebert-mnli", "ollama", "agent"]).optional(),
+    parseEngine: z
+      .enum(["manual", "deterministic", "mobilebert-mnli", "ollama", "agent", "gemini"])
+      .optional(),
     parseConfidence: z.number().min(0).max(1).optional(),
     splitMode: z.enum(["equal", "exact"]).optional(),
     participants: z.array(memberIdSchema).min(1, "at least one member must bear this cost").max(12).optional(),
@@ -182,6 +186,23 @@ export const parseRequestSchema = z.object({
 });
 
 export type ParseRequest = z.infer<typeof parseRequestSchema>;
+
+/**
+ * One line, sent to the optional cloud tier.
+ *
+ * Smaller than `parseRequestSchema` on purpose: the hosted model is only ever
+ * asked for a direction on a single message the rules could not settle, so the
+ * body it is allowed to carry is capped well below the paste limit.
+ */
+export const cloudDirectionRequestSchema = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(4, "that line is too short for the reader")
+    .max(600, "send one message, at most 600 characters"),
+});
+
+export type CloudDirectionRequest = z.infer<typeof cloudDirectionRequestSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* Settlement                                                                  */

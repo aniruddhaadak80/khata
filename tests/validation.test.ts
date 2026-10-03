@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createEntrySchema, memberInputSchema, memberIdSchema, updateEntrySchema } from "@/lib/validation";
+import {
+  cloudDirectionRequestSchema,
+  createEntrySchema,
+  memberInputSchema,
+  memberIdSchema,
+  updateEntrySchema,
+} from "@/lib/validation";
 
 /**
  * The hand-entry form at /ledger/new posts exactly this on its first render:
@@ -81,5 +87,33 @@ describe("memberInputSchema", () => {
 
   it("rejects an empty member id", () => {
     expect(memberInputSchema.safeParse({ id: "", name: "You", kind: "you" }).success).toBe(false);
+  });
+});
+
+describe("cloudDirectionRequestSchema", () => {
+  it("accepts a single pasted line", () => {
+    expect(cloudDirectionRequestSchema.safeParse({ text: "wifi seller refunded me 320" }).success).toBe(true);
+  });
+
+  it("trims what it accepts", () => {
+    expect(cloudDirectionRequestSchema.parse({ text: "  paid 100  " }).text).toBe("paid 100");
+  });
+
+  it("refuses an empty line, a stub and a whole paste", () => {
+    expect(cloudDirectionRequestSchema.safeParse({ text: "" }).success).toBe(false);
+    expect(cloudDirectionRequestSchema.safeParse({ text: "hi" }).success).toBe(false);
+    expect(cloudDirectionRequestSchema.safeParse({ text: "x".repeat(601) }).success).toBe(false);
+  });
+
+  it("refuses a body with no text at all", () => {
+    expect(cloudDirectionRequestSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("parseEngine", () => {
+  it("records a line the hosted model decided as gemini, and still refuses nonsense", () => {
+    const base = { ...HAND_ENTRY_PAYLOAD };
+    expect(createEntrySchema.safeParse({ ...base, parseEngine: "gemini" }).success).toBe(true);
+    expect(createEntrySchema.safeParse({ ...base, parseEngine: "chatgpt" }).success).toBe(false);
   });
 });

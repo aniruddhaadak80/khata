@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { getRepository, resolveDatabaseUrl } from "@/lib/repository";
 import { getFxSnapshot } from "@/lib/fx";
+import { cloudConfig } from "@/lib/cloud-model";
 import { ENGINE_VERSION } from "@/lib/engine";
 import { site } from "@/config/site";
 
@@ -104,6 +105,16 @@ export async function GET() {
           id: site.model.id,
           runs: "in the visitor's browser via @huggingface/transformers",
           license: site.model.license,
+        },
+        /**
+         * Configuration, not a live probe: health must stay green when a
+         * hosted model is unreachable, because khata never needs it. The key
+         * itself is never reported — only whether one exists.
+         */
+        cloud: {
+          ...cloudConfig(),
+          required: false,
+          role: "optional third tier, only for directions the rules left unclear",
         },
         probes,
         checkedAt: new Date().toISOString(),

@@ -39,7 +39,7 @@ export type EvidenceSource = "paste" | "sms" | "forward" | "manual" | "agent";
  * local Ollama daemon running an open-weight model such as Gemma. `agent` means
  * an MCP tool wrote the line through the shared service layer.
  */
-export type ParseEngine = "manual" | "deterministic" | "mobilebert-mnli" | "ollama" | "agent";
+export type ParseEngine = "manual" | "deterministic" | "mobilebert-mnli" | "ollama" | "agent" | "gemini";
 
 /**
  * Whether a payload came from the network or from the sealed offline sample.

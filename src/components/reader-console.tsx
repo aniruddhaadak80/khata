@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Cpu, Download, Loader2, PenLine, Wand2 } from "lucide-react";
+import { Cloud, Cpu, Download, Loader2, PenLine, Wand2 } from "lucide-react";
 import { api, errorText } from "@/lib/api";
 import { isoToday, readText, resolveDirection, summariseRead } from "@/lib/reader";
 import {
@@ -83,6 +83,12 @@ export function ReaderConsole({ household }: { household: Household }) {
   });
   const [modelBusy, setModelBusy] = useState(false);
   const [ollama, setOllama] = useState<OllamaProbe | null>(null);
+  /**
+   * Whether this deployment offers the server's hosted-model tier at all.
+   * `null` until the server has answered, and it stays `null` if the question
+   * fails — the button is rendered only on an explicit yes.
+   */
+  const [cloud, setCloud] = useState<{ configured: boolean; model: string } | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<
@@ -104,6 +110,19 @@ export function ReaderConsole({ household }: { household: Household }) {
     let cancelled = false;
     probeOllama().then((probe) => {
       if (!cancelled) setOllama(probe);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* Ask the server once whether a hosted tier exists. A deployment with no
+     key answers "no" and never shows the control, so adding this feature
+     changed nothing at all for a keyless deployment. */
+  useEffect(() => {
+    let cancelled = false;
+    api.get<{ configured: boolean; model: string }>("/api/reader/direction").then((res) => {
+      if (!cancelled && res.ok) setCloud(res.data);
     });
     return () => {
       cancelled = true;
@@ -180,6 +199,77 @@ export function ReaderConsole({ household }: { household: Household }) {
     }
   }, [drafts]);
 
+  /**
+   * The same job as `runModel`, one tier up: lines the rules were unsure
+   * about, decided by the hosted model on the server.
+   *
+   * Deliberately sequential — a household paste is a handful of lines, and the
+   * free tier's quota is per minute, so firing them in parallel would buy
+   * nothing and spend the budget. Every answer is fed through
+   * `resolveDirection`, the very same gate the browser model passes through.
+   */
+  const runCloud = useCallback(async () => {
+    const interesting = drafts.filter(
+      (d) => d.direction.confidence < 0.8 && d.amountMinor.value !== null,
+    );
+    if (interesting.length === 0) {
+      setResult({
+        kind: "failed",
+        message:
+          "The rules were already confident about every line, so there was nothing for the cloud model to decide.",
+      });
+      return;
+    }
+
+    setModelBusy(true);
+    setResult(null);
+    try {
+      const answers: Array<{ id: string; answer: Classification }> = [];
+      for (const draft of interesting) {
+        const res = await api.post<{ direction: Classification["direction"]; confidence: number }>(
+          "/api/reader/direction",
+          { text: draft.text },
+        );
+        if (!res.ok) throw new Error(errorText(res.error));
+        answers.push({
+          id: draft.id,
+          answer: {
+            text: draft.text,
+            direction: res.data.direction,
+            confidence: res.data.confidence,
+            scores: { [res.data.direction]: res.data.confidence },
+          },
+        });
+      }
+
+      const byId = new Map(answers.map((a) => [a.id, a.answer]));
+      setDrafts((prev) =>
+        prev.map((d) => {
+          const c = byId.get(d.id);
+          if (!c) return d;
+          const resolved = summariseRead({ ...d, direction: resolveDirection(d.direction, c) });
+          return {
+            ...resolved,
+            id: d.id,
+            selected: resolved.ready || d.selected,
+            directionOverride: d.directionOverride,
+            engineUsed: "cloud",
+            modelDirection: c.direction,
+            modelConfidence: c.confidence,
+            modelScores: c.scores,
+          };
+        }),
+      );
+    } catch (err) {
+      setResult({
+        kind: "failed",
+        message: `${err instanceof Error ? err.message : "The cloud model could not be reached."} The rules and the browser model are unaffected.`,
+      });
+    } finally {
+      setModelBusy(false);
+    }
+  }, [drafts]);
+
   const patch = useCallback((id: string, changes: Partial<Draft>) => {
     setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...changes } : d)));
   }, []);
@@ -206,7 +296,12 @@ export function ReaderConsole({ household }: { household: Household }) {
         // Names are resolved to member ids here, at the edge, so the rest of the
         // system only ever deals in ids.
         participants: participantIds(d, household),
-        parseEngine: d.engineUsed === "model" ? ("mobilebert-mnli" as const) : ("deterministic" as const),
+        parseEngine:
+          d.engineUsed === "model"
+            ? ("mobilebert-mnli" as const)
+            : d.engineUsed === "cloud"
+              ? ("gemini" as const)
+              : ("deterministic" as const),
         parseConfidence: d.confidence,
         evidence: "paste" as const,
       };
@@ -317,6 +412,12 @@ export function ReaderConsole({ household }: { household: Household }) {
             <Cpu className="h-4 w-4" aria-hidden="true" />
             {modelBusy ? "Running…" : "Re-decide directions with the model"}
           </button>
+          {cloud?.configured ? (
+            <button type="button" className="btn btn-quiet" onClick={runCloud} disabled={modelBusy || drafts.length === 0}>
+              <Cloud className="h-4 w-4" aria-hidden="true" />
+              {modelBusy ? "Asking the cloud…" : "Re-decide directions with the cloud model"}
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-4" aria-live="polite">
@@ -375,6 +476,17 @@ export function ReaderConsole({ household }: { household: Household }) {
         ) : (
           <p className="mt-4 text-xs text-[color:var(--color-cloth-400)]">Checking for a local Ollama…</p>
         )}
+
+        {/* The hosted tier, offered only when this deployment actually has a key. */}
+        {cloud?.configured ? (
+          <p className="mt-4 border border-[color:var(--color-turmeric-500)] p-3 text-xs leading-relaxed text-[color:var(--color-turmeric-300)]">
+            Optional third tier: this deployment has a server-side key, so the server can ask{" "}
+            <span className="font-data">{cloud.model}</span> about a line the rules left unclear. The key lives in a
+            server environment variable and never reaches this page, the answer is capped below a measured rule it
+            would otherwise overrule, and every other step — rules, browser model, settlement, seal — works with no
+            cloud model at all.
+          </p>
+        ) : null}
       </section>
 
       {/* ---- Candidates --------------------------------------------------- */}
@@ -508,7 +620,9 @@ function CandidateCard({
               &ldquo;{draft.text}&rdquo;
             </span>
             <span className="mt-1 flex flex-wrap items-center gap-2">
-              <span className="rubric">{draft.engineUsed === "model" ? "model" : "rules"}</span>
+              <span className="rubric">
+                {draft.engineUsed === "model" ? "model" : draft.engineUsed === "cloud" ? "cloud" : "rules"}
+              </span>
               <span className="rubric">{Math.round(draft.confidence * 100)}% sure</span>
             </span>
           </span>

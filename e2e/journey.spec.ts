@@ -130,6 +130,60 @@ test("a validation failure is a 422 with field detail, not a 500", async ({ requ
   expect((await notFound.json()).error.code).toBe("NOT_FOUND");
 });
 
+test("the cloud tier tells the truth about itself, either way", async ({ request }) => {
+  // The invariant is the same on a keyed deployment and a keyless one: the
+  // status must be honest, no key may ever appear in a response, and the
+  // answer to a real line must match what the status promised. Read the
+  // status first, then hold the POST to it.
+  const status = await request.get("/api/reader/direction");
+  expect(status.status()).toBe(200);
+  const { data } = await status.json();
+  expect(typeof data.configured).toBe("boolean");
+  expect(data.provider).toBe("google");
+  expect(JSON.stringify(data)).not.toContain("AIza");
+
+  const asked = await request.post("/api/reader/direction", {
+    data: { text: "wifi seller refunded me 320" },
+  });
+
+  if (data.configured) {
+    expect(asked.status()).toBe(200);
+    const body = await asked.json();
+    expect(["inflow", "outflow", "not-money"]).toContain(body.data.direction);
+    expect(body.data.confidence).toBeGreaterThan(0);
+    // Capped: a hosted model's self-assessment may not claim to outrank a
+    // rule the engine measured.
+    expect(body.data.confidence).toBeLessThanOrEqual(0.9);
+    expect(body.data.model).toBeTruthy();
+    expect(JSON.stringify(body)).not.toContain("AIza");
+  } else {
+    expect(asked.status()).toBe(503);
+    const body = await asked.json();
+    expect(body.error.code).toBe("UNSUPPORTED");
+    expect(body.error.message).toMatch(/not configured/i);
+  }
+});
+
+test("the reader offers a cloud control only when the server says there is one", async ({ page }) => {
+  // Ask the server first, then hold the interface to the answer: a keyed
+  // deployment must offer the control, a keyless one must not render it at all.
+  const status = await page.request.get("/api/reader/direction");
+  const { data } = await status.json();
+
+  await page.goto("/reader");
+  const control = page.getByRole("button", { name: /Re-decide directions with the cloud model/ });
+
+  if (data.configured) {
+    await expect(control).toBeVisible();
+    const escaped = String(data.model).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    await expect(page.getByText(new RegExp(escaped))).toBeVisible();
+  } else {
+    await expect(control).toHaveCount(0);
+    // Absent does not mean degraded: the in-browser tier is still offered.
+    await expect(page.getByRole("button", { name: /Download 28 MB model/ })).toBeVisible();
+  }
+});
+
 /* -------------------------------------------------------------------------- */
 /* The journey. One context, one household, start to finish.                     */
 /* -------------------------------------------------------------------------- */
