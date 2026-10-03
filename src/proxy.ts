@@ -14,8 +14,11 @@ import { OWNER_COOKIE, SCOPE_HEADER, isValidOwner, newOwnerId, ownerCookieOption
  * render can read. Without the header, the first render of a first visit would
  * mint a *different* scope than the one the browser is given, and the first write
  * would disappear into a session nobody can return to.
+ *
+ * Named `proxy`, not `middleware`: Next 16 renamed the file convention and
+ * warns on the old one.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const existing = request.cookies.get(OWNER_COOKIE)?.value;
   if (isValidOwner(existing)) return NextResponse.next();
 
@@ -43,3 +46,5 @@ export const config = {
     "/((?!_next/static|_next/image|favicon\\.ico|opengraph-image|robots\\.txt|sitemap\\.xml|mcp\\.json|.*\\.[\\w]+$).*)",
   ],
 };
+
+export default proxy;

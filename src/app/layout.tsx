@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Anek_Latin, Azeret_Mono, Newsreader } from "next/font/google";
+import localFont from "next/font/local";
 import { absoluteUrl, site } from "@/config/site";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -14,28 +14,46 @@ import "./globals.css";
  * Indian household name renders properly instead of being transliterated badly.
  * Azeret Mono — wide, geometric and uncommon, for seals, hashes and dates.
  *
- * All three are SIL Open Font License.
+ * Self-hosted rather than fetched from `next/font/google`, for three reasons:
+ *
+ *   1. It works with no network. `next/font/google` reaches out to Google's CDN
+ *      the first time a page is compiled or rendered, which is exactly the
+ *      dependency a "keep the household's data on your machine" product should
+ *      not have.
+ *   2. Three families in one `next/font/google` call chain breaks the dev
+ *      server's font import map in Next 16 ("next/font/google queries have
+ *      exactly one entry"), which made `npm run dev` fail outright.
+ *   3. No third-party request at runtime, so the README's claim of no
+ *      third-party script is actually true.
+ *
+ * All three are SIL Open Font License, which permits redistribution. The files
+ * are the latin subset Google serves, so they cover the whole product.
  */
-const newsreader = Newsreader({
-  subsets: ["latin"],
-  display: "swap",
+const newsreader = localFont({
+  src: "./fonts/newsreader-latin.woff2",
   variable: "--font-newsreader",
-  weight: ["400", "500", "600", "700"],
-  style: ["normal", "italic"],
+  display: "swap",
+  weight: "400 700",
+  style: "normal",
+  fallback: ["Georgia", "Times New Roman", "serif"],
 });
 
-const anek = Anek_Latin({
-  subsets: ["latin"],
-  display: "swap",
+const anek = localFont({
+  src: "./fonts/aneklatin-latin.woff2",
   variable: "--font-anek",
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  weight: "400 700",
+  style: "normal",
+  fallback: ["Segoe UI", "system-ui", "sans-serif"],
 });
 
-const azeret = Azeret_Mono({
-  subsets: ["latin"],
-  display: "swap",
+const azeret = localFont({
+  src: "./fonts/azeretmono-latin.woff2",
   variable: "--font-azeret",
-  weight: ["400", "500"],
+  display: "swap",
+  weight: "400 500",
+  style: "normal",
+  fallback: ["ui-monospace", "Consolas", "monospace"],
 });
 
 export const metadata: Metadata = {

@@ -21,15 +21,33 @@ import { expect, test, type Page } from "@playwright/test";
 const CONSOLE_ERRORS: string[] = [];
 const FAILED_REQUESTS: string[] = [];
 
+/**
+ * The one console error the run is allowed to contain.
+ *
+ * The Reader deliberately probes for a local Ollama daemon on 127.0.0.1:11434
+ * so it can tell you whether local inference is available. On a machine with no
+ * Ollama running, that fetch fails, and Chrome logs every failed fetch as a
+ * console error whatever the application does about it. The application handles
+ * it — the UI says plainly that no daemon was found and why — so the allowlist
+ * is this exact string, not a pattern.
+ */
+const EXPECTED_CONSOLE_NOISE = "Failed to load resource: net::ERR_CONNECTION_REFUSED";
+
 function watch(page: Page) {
   page.on("console", (message) => {
-    if (message.type() === "error") CONSOLE_ERRORS.push(message.text());
+    if (message.type() !== "error") return;
+    if (message.text() === EXPECTED_CONSOLE_NOISE) return;
+    CONSOLE_ERRORS.push(message.text());
   });
   page.on("pageerror", (error) => CONSOLE_ERRORS.push(`pageerror: ${error.message}`));
   page.on("requestfailed", (request) => {
     const failure = request.failure()?.errorText ?? "";
-    // Aborted navigations are normal; only real failures matter.
-    if (!/aborted|canceled/i.test(failure)) FAILED_REQUESTS.push(`${request.url()} ${failure}`);
+    // Aborted navigations are normal. The Ollama probe is expected to fail when
+    // no local daemon is running, and it is identified by its URL rather than
+    // by a message that could belong to anything.
+    if (/aborted|canceled/i.test(failure)) return;
+    if (request.url().includes(":11434/")) return;
+    FAILED_REQUESTS.push(`${request.url()} ${failure}`);
   });
   page.on("response", (response) => {
     if (response.status() >= 500) FAILED_REQUESTS.push(`${response.url()} ${response.status()}`);
@@ -281,15 +299,20 @@ test("the primary journey works end to end", async ({ page }) => {
 
   /* --- 9. Delete through the interface ------------------------------------ */
 
-  // Remember what we are about to remove, so its absence can be asserted.
-  // Anchored exactly: a loose `/ledger` regex also matches `/ledger/<id>` and
-  // would pass without anything happening.
+  // Count the book, remove one line, and prove the count fell. Matching on the
+  // amount text instead would be a trap: "1250.00 INR" contains "250.00 INR",
+  // and getByText matches on substrings.
+  await page.goto("/ledger");
+  // Wait for the book to actually load before counting it, or the count is the
+  // empty state rather than the rows.
+  await expect(page.locator("main ul > li").first()).toBeVisible();
+  const beforeDelete = await page.locator("main ul > li").count();
+  expect(beforeDelete).toBeGreaterThan(0);
+
   await page.goto(entryPath);
-  const doomed = await page.locator("main h1").innerText();
   await page.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page).toHaveURL(/\/ledger(\?.*)?$/);
-
-  await expect(page.getByText(doomed)).toHaveCount(0);
+  await expect(page.locator("main ul > li")).toHaveCount(beforeDelete - 1);
 
   // Gone from the book, but still provable.
   await page.goto("/verify");

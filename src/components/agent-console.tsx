@@ -13,7 +13,7 @@
  *      ships. Every error below is the server's actual JSON-RPC error.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Play, RotateCcw, Terminal } from "lucide-react";
 import { api } from "@/lib/api";
@@ -40,6 +40,12 @@ interface WireEntry {
 
 let wireSeq = 0;
 
+/* Stable, module-level snapshots for useSyncExternalStore. The origin never
+ * changes during a session, so this never subscribes to anything. */
+const noopSubscribe = () => () => {};
+const getOrigin = () => (typeof window === "undefined" ? "" : window.location.origin);
+const getServerOrigin = () => "";
+
 export function AgentConsole({ household }: { household: Household }) {
   const [tools, setTools] = useState<ToolSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +56,20 @@ export function AgentConsole({ household }: { household: Household }) {
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [amount, setAmount] = useState("1250");
   const [category, setCategory] = useState("utilities");
+
+  /**
+   * The absolute origin, read through `useSyncExternalStore`.
+   *
+   * Deliberately *not* `typeof window === "undefined" ? "/api/mcp" : origin`.
+   * That branch is the first item on React's own list of hydration-mismatch
+   * causes: the server renders the relative path, the client renders the origin,
+   * and the whole tree is regenerated.
+   *
+   * `useSyncExternalStore` is the right tool rather than an effect: it takes the
+   * server snapshot as its third argument, so the first client render agrees
+   * with the server by construction, and no `setState` is needed.
+   */
+  const origin = useSyncExternalStore(noopSubscribe, getOrigin, getServerOrigin);
 
   const call = useCallback(async (label: string, payload: unknown) => {
     setBusy(label);
@@ -218,7 +238,7 @@ export function AgentConsole({ household }: { household: Household }) {
           live address and the tool names.
         </p>
         <p className="mt-2 font-data text-xs text-[color:var(--color-turmeric-300)]">
-          POST {typeof window === "undefined" ? "/api/mcp" : window.location.origin}/api/mcp
+          POST {origin ? `${origin}/api/mcp` : "/api/mcp"}
         </p>
       </section>
 
