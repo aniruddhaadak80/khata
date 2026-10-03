@@ -86,7 +86,7 @@ needs a key.
 ```bash
 npm run typecheck   # tsc --noEmit, strict
 npm run lint        # eslint
-npm test            # 151 unit and integration tests (vitest)
+npm test            # 161 unit and integration tests (vitest)
 npm run build       # production build
 npm run check       # all four in sequence
 
@@ -537,7 +537,7 @@ a ledger line.
 ```mermaid
 flowchart LR
   Push["push to main"] --> CI["GitHub Actions<br/>Node 22, npm ci"]
-  CI --> Gate["typecheck, lint,<br/>151 tests, build"]
+  CI --> Gate["typecheck, lint,<br/>161 tests, build"]
   Gate --> Deploy["Vercel production build"]
   Deploy --> Env["DATABASE_URL<br/>+ SITE_URL"]
   Env --> Health["/api/health must<br/>report neon-postgres"]

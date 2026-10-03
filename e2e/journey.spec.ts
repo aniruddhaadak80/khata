@@ -410,6 +410,44 @@ test("keyboard navigation reaches the content and focus is visible", async ({ pa
   expect(["A", "BUTTON", "INPUT", "SELECT", "TEXTAREA"]).toContain(tag);
 });
 
+test("the hand-entry form writes a line using the default household", async ({ page }) => {
+  // A real write against real Postgres, so it gets the same slack as the
+  // primary journey rather than a shrunken timeout that would hide a stall.
+  test.setTimeout(180_000);
+  watch(page);
+
+  await page.goto("/ledger/new");
+
+  // The defaults this test is about sit behind the collapsed "Everything
+  // else" panel, so open it rather than reading hidden inputs.
+  await page.getByRole("button", { name: "The rest of the fields" }).click();
+  await expect(page.locator("#advanced-body")).toBeVisible();
+
+  // Defaults are the point: paid-by is `me` and participants are every
+  // member, and both ids are shorter than the 3-character minimum the input
+  // schema used to demand, so this form could not save its own default.
+  await expect(page.locator("#n-payer")).toHaveValue("me");
+  await expect(page.getByRole("button", { name: "You", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Flatmate", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  await page.locator("#n-amount").fill("350");
+  await page.getByRole("button", { name: "Write and seal" }).click();
+
+  // Refusal would render the failure card, not this heading.
+  await expect(page.getByRole("heading", { name: "Written and sealed" })).toBeVisible();
+  await expect(page.getByText(/khata refused that/)).toHaveCount(0);
+
+  // And it is a real, sealed line rather than a success message.
+  await page.getByRole("link", { name: "Inspect the line" }).click();
+  await expect(page).toHaveURL(/\/ledger\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { name: "The evidence" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Its chain" })).toBeVisible();
+
+  // The engine can settle a book that includes it.
+  await page.goto("/settle");
+  await expect(page.getByText(/trust score \/ 100/)).toBeVisible();
+});
+
 test("nothing logged a console error or a server failure", async () => {
   expect(CONSOLE_ERRORS, `console errors:\n${CONSOLE_ERRORS.join("\n")}`).toEqual([]);
   expect(FAILED_REQUESTS, `failed requests:\n${FAILED_REQUESTS.join("\n")}`).toEqual([]);

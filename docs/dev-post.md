@@ -105,7 +105,7 @@ Every figure carries `live`, `stale` or `fallback` and a real as-of date. A seal
 
 ## What I got wrong, because the bugs are the interesting part
 
-Six defects, and the last two only a real browser with the model actually running could find. None were visible in the tests I wrote first.
+Seven defects. The last two only a real browser with the model actually running could find; the seventh was hiding in the one flow my tests only ever *loaded* and never submitted. None were visible in the tests I wrote first.
 
 **Six of nine pages returned 500 in production.** `cookies().set()` is illegal during render, so a Server Component that minted the anonymous scope took the page down. Fixed in the request proxy — and it writes the scope onto the *request* as a header as well as onto the *response*, or the first render and the browser disagree about which household you are in.
 
@@ -119,29 +119,32 @@ Six defects, and the last two only a real browser with the model actually runnin
 
 **And when the model did answer, the row did not believe it.** A candidate's confidence, its "writable" flag and its caveat list were all computed once when the rules read the line and never recomputed, so after inference the row still showed `unclear`, still carried "could not tell which way the money moved", and left the checkbox disabled — the model had answered and the user still could not record the line. Those three figures are now derived in one place, `summariseRead`, and recomputed whenever a field changes.
 
+**And the hand-entry form could not save its own defaults.** Auditing every published URL turned up the last one. `/ledger/new` posts `paidBy` set to the first household member and `participants` set to every member, and the default household seeds those ids as `me` and `them` — but the input schema demanded member ids of at least three characters. So the primary "type a line by hand" form returned a 422 on its untouched defaults, while the reader, the agent and the repository layer all accepted the same two-character ids happily. Twenty browser tests passed straight through it, because every one of them only *loaded* that page to check it rendered. The minimum is gone (the alphabet restriction and the length cap stay), and there are ten unit tests plus a browser test that fills the form in and actually presses **Write and seal**.
+
 I also shipped a hydration mismatch for a while — `typeof window === "undefined"` is the first item on React's own list of causes, and my agent console had exactly that. It is now `useSyncExternalStore`, whose server snapshot makes the first client render agree by construction.
 
 ---
 
-## Honest status of the live app
+## Live, and what it takes to prove it
 
-The deployment is **READY** and I verified it end to end through the authenticated CLI: `neon-postgres`, `SELECT 1 succeeded`, live ECB rates, `khata-engine/1.0.0`.
+**https://khata-ai.vercel.app** — a short alias on the deployment, and the link everywhere else: README, article, MCP manifest, canonical tag.
 
-Public access is currently blocked by two account-level conditions that are not properties of the code:
+`npm run verify:live` runs fifteen checks against it over plain public HTTP, with no cookies and no authentication, and fails on anything it does not like:
 
-1. The Vercel project had `ssoProtection` set to gate every deployment. I have disabled it, but the setting applies to new deployments and the existing ones were created while it was on.
-2. Creating a replacement deployment hit the free tier's 100-deployments-per-day limit, which resets in 24 hours.
+```
+15 of 15 checks passed
+```
 
-So I am not going to tell you the live link works, because right now it does not. `npm run verify:live` deliberately treats a Vercel Authentication page as a **failure** rather than a 200, so a protected deployment cannot be quietly mistaken for a live one — that is the check failing honestly in my own repo right now.
+Landing page 200; a real production store (`neon-postgres`, `SELECT 1`); live ECB rates for 29 currencies; a record created, read back, updated and deleted through the public API; a sealed settlement with `minimal=true`; MCP `initialize` plus 11 tools plus a mutating `tools/call` whose retry returns the same row; integrity replay clean before and after a tombstoned delete; nine routes at 200; the manifest pointing at this deployment; the repository at 200.
 
-**The guaranteed path is the clone.** No keys, no database, no network:
+That script deliberately treats a Vercel Authentication page as a **failure** rather than a 200. It spent most of a day red, honestly, while deployment protection and a daily deploy limit were in the way — the check is only worth trusting because it was willing to fail.
+
+**The clone works too**, and needs no keys, no database and no network:
 
 ```bash
 git clone https://github.com/aniruddhaadak80/khata
 cd khata && npm install && npm run dev
 ```
-
-I will update the live link once the limit resets.
 
 ---
 
@@ -150,14 +153,15 @@ I will update the live link once the limit resets.
 ```
 typecheck   pass (strict, noUncheckedIndexedAccess)
 lint        pass
-tests       151 unit + integration, 5 files
+tests       161 unit + integration, 6 files
 build       pass
-browser     9/9 desktop (1440×900) and 9/9 mobile (Pixel 7), real Postgres, zero console errors
+browser     10/10 desktop (1440×900) and 10/10 mobile (Pixel 7), real Postgres, zero console errors
 model       real 28 MB download + onnxruntime-web inference in Chromium (opt-in spec)
+live        15/15 public HTTP checks against https://khata-ai.vercel.app
 seal chain  replays clean; digests pinned to hand-computed vectors
 ```
 
-The browser suite walks the whole journey through visible controls — paste, read, correct, write, inspect, decide, stamp, agent mutation, read-back in the UI, idempotent retry, export, share, delete, replay — and **fails the run on any console error or server 5xx**. It caught the first four bugs above; the model spec caught the last two.
+The browser suite walks the whole journey through visible controls — paste, read, correct, write, inspect, decide, stamp, agent mutation, read-back in the UI, idempotent retry, export, share, delete, replay — and **fails the run on any console error or server 5xx**. It caught the first four bugs above; the model spec caught the last two; and the seventh survived until I went back and made a test *submit* the hand-entry form instead of only loading it.
 
 ## Licence
 

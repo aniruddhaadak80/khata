@@ -47,9 +47,16 @@ export function badRequest(message: string): Err {
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY = /^[A-Z]{3}$/;
 
+/**
+ * A member id is the stable key of a person inside one household, not a
+ * display name. The default household seeds them as `me` and `them`, so this
+ * has to accept short ids: rejecting them made the hand-entry form fail its
+ * own default payload with a 422. Length is capped and the alphabet is
+ * restricted; that is the real protection.
+ */
 export const memberIdSchema = z
   .string()
-  .min(3, "member id is too short")
+  .min(1, "member id cannot be empty")
   .max(64, "member id is too long")
   .regex(/^[A-Za-z0-9_-]+$/, "member id may only contain letters, digits, dash and underscore");
 
