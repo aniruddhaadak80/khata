@@ -360,6 +360,44 @@ await check("17. the hosted model answers a line the rules leave unclear", async
   return `${data.direction} at ${Math.round(data.confidence * 100)}% from ${data.model} in ${data.latencyMs}ms`;
 });
 
+await check("18. a cloud-decided line can be committed, sealed and removed", async () => {
+  const status = await call("/api/reader/direction");
+  if (status.json?.data?.configured !== true) {
+    return "skipped: this deployment offers no cloud tier, which is a passing state";
+  }
+
+  // Reading a direction is only useful if the ledger will accept it: the
+  // engine column has to know the new value or the write dies on a CHECK.
+  const res = await call("/api/entries", {
+    method: "POST",
+    body: {
+      occurredOn: "2026-10-03",
+      direction: "inflow",
+      amountMinor: 32_000,
+      currency: "INR",
+      paidBy: "me",
+      category: "other",
+      note: "live proof that a cloud decision commits",
+      rawText: "wifi seller refunded me 320",
+      evidence: "paste",
+      parseEngine: "gemini",
+      parseConfidence: 0.9,
+      splitMode: "equal",
+      participants: ["me", "them"],
+      status: "draft",
+    },
+  });
+  must(res.status === 201, `create returned ${res.status}: ${res.text.slice(0, 200)}`);
+  must(res.json.data.entry.parseEngine === "gemini", `engine was ${res.json.data.entry.parseEngine}`);
+  must(res.json.data.seal?.length === 96, "the new line was not sealed");
+
+  const id = res.json.data.entry.id;
+  const removed = await call(`/api/entries/${id}`, { method: "DELETE" });
+  must(removed.status === 200, `delete returned ${removed.status}`);
+  must(removed.json.data.tombstone.kept === true, "the tombstone was not retained");
+  return `created+sealed ${res.json.data.sealShort}, tombstone kept ${removed.json.data.sealShort}`;
+});
+
 /* -------------------------------------------------------------------------- */
 
 const failed = results.filter((r) => !r.ok);

@@ -18,7 +18,7 @@ A shared home produces one specific, boring, weekly problem. Three properties ma
 2. **The arithmetic is contested, not hard.** Anyone can work out who owes whom. Nobody can agree on the inputs, so they argue about the output.
 3. **The failure mode is a relationship.** Two people who live together cannot open an invoice app.
 
-That third point is why this has no accounts, no login, and no API key.
+That third point is why this has no accounts, no login, and no key standing between you and your own book. The one optional key in the system is server-side, off unless you turn it on, and never touches the page.
 
 ## Why open mattered — the actual answer
 
@@ -29,7 +29,7 @@ The data is **the whole product**. A household ledger is a record of who spent m
 So the reader runs **in your browser**:
 
 - [`Xenova/mobilebert-uncased-mnli`](https://huggingface.co/Xenova/mobilebert-uncased-mnli) — a 28 MB int8 natural-language-inference model — loaded once into your browser's cache and executed through `onnxruntime-web`. Apache-2.0.
-- **No key exists in this project.** Not a missing one, not a documented one — the variable is absent from the code.
+- **Nothing here needs a key from you.** The default install ships with no key variable at all — and the single optional, server-side key described below is off unless you set it yourself.
 - After the first download it runs **with the network switched off**. A laptop on a train, in a flat whose broadband is one of the things being argued about.
 - It is swappable. The model is one string in `src/lib/local-model.ts`; point it at any open-weights checkpoint, or at a local Ollama daemon running `gemma3:1b`, and nothing else changes.
 
@@ -56,6 +56,17 @@ A zero-shot NLI model reads the whole sentence and scores each direction hypothe
 So the rule I settled on is deliberately narrow: the model decides only where the rules score below 0.80, and it may overrule a confident rule only when it is at least as confident itself. That keeps the cost honest — the 28 MB gets spent on the minority of lines that need it, not on every line that arrives.
 
 The proof is a real browser test, not a unit test with the model mocked. It downloads the weights, runs onnxruntime-web, and asserts the model answered `inflow`, that the row became writable, that its "could not tell which way the money moved" caveat disappeared, and that a line the rules already read at 0.90 came back still badged `rules` rather than being silently re-decided. It is skipped by default because a test run should not depend on a third-party CDN, and it is in `e2e/model.spec.ts` if you want to watch it happen.
+
+### The third reader, and why it stays optional
+
+Sometimes both local tiers hedge. Shorthand, forwarded messages with the verbs stripped, a line with no first-person marker at all — the rules return `unclear`, the browser model will not commit, and the row stays unwritable. So there is a third reader, and it is deliberately the least trusted one.
+
+- **It runs on the server, once, and only for lines the local tiers declined.** `POST /api/reader/direction` takes the text, calls a hosted model, and returns a direction. The key is read from `GEMINI_API_KEY` in the deployment environment and nowhere else: not in the repository, not in the client bundle, not in a URL, and not in a response body. `/api/health` reports `cloud.configured: true` and the model's name, and that is the whole disclosure.
+- **Its answer is capped at 90% and badged `cloud`.** It can never present as certainty, and the reader names the tier that produced the answer instead of merging it in silently.
+- **Unset, nothing changes.** The endpoint answers `503 UNSUPPORTED`, the "Re-decide directions with the cloud model" control is never rendered, and a browser test asserts exactly that — so the default build behaves as it did before the tier existed. Two tests cover both states by asking the server first and holding the interface to its answer.
+
+Writing it found an eighth defect in my own schema, and I would rather it were in this list than in a reader's pull request. `entries.parse_engine` carries a `CHECK` constraint enumerating the engine names, written when there were five engines, and `CREATE TABLE IF NOT EXISTS` does not alter a table that already exists — so the cloud tier decided directions perfectly, committed one, and died with a 500 against the constraint. No amount of reading-path testing can see that: the answer arrives before the write does. The constraint now lists six values in production and in fresh databases alike, and the live proof script creates, seals and tombstones a `gemini`-engine line on every run.
+
 ---
 
 ## The four things it does
@@ -129,13 +140,13 @@ I also shipped a hydration mismatch for a while — `typeof window === "undefine
 
 **https://khata-ai.vercel.app** — a short alias on the deployment, and the link everywhere else: README, article, MCP manifest, canonical tag.
 
-`npm run verify:live` runs fifteen checks against it over plain public HTTP, with no cookies and no authentication, and fails on anything it does not like:
+`npm run verify:live` runs eighteen checks against it over plain public HTTP, with no cookies and no authentication, and fails on anything it does not like:
 
 ```
-15 of 15 checks passed
+18 of 18 checks passed
 ```
 
-Landing page 200; a real production store (`neon-postgres`, `SELECT 1`); live ECB rates for 29 currencies; a record created, read back, updated and deleted through the public API; a sealed settlement with `minimal=true`; MCP `initialize` plus 11 tools plus a mutating `tools/call` whose retry returns the same row; integrity replay clean before and after a tombstoned delete; nine routes at 200; the manifest pointing at this deployment; the repository at 200.
+Landing page 200; a real production store (`neon-postgres`, `SELECT 1`); live ECB rates for 29 currencies; a record created, read back, updated and deleted through the public API; a sealed settlement with `minimal=true`; MCP `initialize` plus 11 tools plus a mutating `tools/call` whose retry returns the same row; integrity replay clean before and after a tombstoned delete; nine routes at 200; the manifest pointing at this deployment; the repository at 200; and the optional cloud tier — reporting its own configuration without leaking a key, answering a line the rules leave at 0.00, and committing a cloud-decided line that seals and then tombstones.
 
 That script deliberately treats a Vercel Authentication page as a **failure** rather than a 200. It spent most of a day red, honestly, while deployment protection and a daily deploy limit were in the way — the check is only worth trusting because it was willing to fail.
 
@@ -153,11 +164,12 @@ cd khata && npm install && npm run dev
 ```
 typecheck   pass (strict, noUncheckedIndexedAccess)
 lint        pass
-tests       161 unit + integration, 6 files
+tests       181 unit + integration, 7 files
 build       pass
-browser     10/10 desktop (1440×900) and 10/10 mobile (Pixel 7), real Postgres, zero console errors
+browser     12/12 desktop (1440x900) and 12/12 mobile (Pixel 7), real Postgres, zero console errors
 model       real 28 MB download + onnxruntime-web inference in Chromium (opt-in spec)
-live        15/15 public HTTP checks against https://khata-ai.vercel.app
+cloud       same browser suite run twice: 12/12 with no key, 12/12 with a key, both branches asserted
+live        18/18 public HTTP checks against https://khata-ai.vercel.app
 seal chain  replays clean; digests pinned to hand-computed vectors
 ```
 

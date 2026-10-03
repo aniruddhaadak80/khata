@@ -25,7 +25,8 @@ back of a receipt — turns them into a real ledger, keeps the original text as 
 the shortest way to settle up, and seals every change so the number can be *checked* instead of
 believed.
 
-There is **no account, no API key and no install**. The book belongs to the browser you open it in.
+There is **no account, no sign-up and no install**. The book belongs to the browser you open it in;
+the single optional key in the system is server-side, and off unless you set it yourself.
 
 <img src="docs/images/reader-model.png" alt="The reader with the open-weight model loaded: two pasted lines, one badged 'model' at 59% with the NLI probability spread shown, one still badged 'rules'. The model-resolved line is now selectable and no longer flagged as unreadable." width="900" />
 
@@ -45,6 +46,10 @@ writable, and that the line the rules already read at 0.90 was left alone.</sub>
   — a 28 MB int8 NLI model — is loaded once into your browser's cache and executed through
   `onnxruntime-web`. It decides the one thing rules cannot: *which way the money moved*.
   `received refund 320` and `refund paid 320` contain the same words and mean opposite things.
+- **A third reader exists, and only if you switch it on.** With an optional server-side key the
+  reader can hand its least certain lines to a hosted model and get a direction back, badged `cloud`
+  and hard-capped at 90% confidence so no hosted answer outranks the model you can inspect. Without
+  the key the button is not rendered, the endpoint refuses, and `/api/health` says so.
 - **Live money, honestly dated.** Exchange rates come from the European Central Bank via
   [Frankfurter](https://api.frankfurter.app) and consumer prices from
   [World Bank Open Data](https://data.worldbank.org/indicator/FP.CPI.TOTL), both keyless. Every
@@ -86,7 +91,7 @@ needs a key.
 ```bash
 npm run typecheck   # tsc --noEmit, strict
 npm run lint        # eslint
-npm test            # 161 unit and integration tests (vitest)
+npm test            # 181 unit and integration tests (vitest)
 npm run build       # production build
 npm run check       # all four in sequence
 
@@ -117,13 +122,19 @@ Documented without values in [`.env.example`](.env.example):
 | `DATABASE_URL` | **in production only** | Hosted Postgres. Neon, Vercel Postgres, Supabase — any will do. |
 | `DATABASE_SCHEMA` | no | Table namespace, when one Postgres instance is shared. |
 | `SITE_URL` | no | Canonical origin for metadata, OpenGraph, the sitemap and `public/mcp.json`. |
+| `GEMINI_API_KEY` | no | Server-side key for the **optional** cloud reader. Never required; stored as a sensitive Vercel variable and absent from this repository. |
+| `GEMINI_MODEL` | no | Overrides the default cloud model (`gemini-3.5-flash-lite`). |
 
 > In production khata **refuses to start** without `DATABASE_URL` rather than silently using an
 > embedded database, which would lose every line on the next cold start. `/api/health` reports
 > which adapter answered.
 
-> There is deliberately **no `LLM_API_KEY` variable.** The model runs in your browser, or against a
-> local Ollama at `127.0.0.1:11434`. Nothing is billed. Do not add one.
+> **There is no `LLM_API_KEY`, and nothing is billed.** The model runs in your browser, or against
+> a local Ollama at `127.0.0.1:11434`. A separate, optional `GEMINI_API_KEY` unlocks one more
+> reader for directions the local tiers left unclear; it is read only on the server, sent only to
+> Google's API, and never echoed back. Leave it unset and `/api/health` reports
+> `cloud.configured: false` while every other feature behaves exactly as described below. Keys
+> belong in the deployment environment, never in a commit.
 
 ### Running a model on your own machine
 
@@ -291,6 +302,7 @@ ledger it is reading. That is a deliberate consequence of not asking anyone to s
 | `/api/entries` | GET, POST | Filtered, sorted, paginated read; validated write |
 | `/api/entries/[id]` | GET, PATCH, DELETE | One line plus its replayed chain; soft delete with a tombstone |
 | `/api/reader/commit` | POST | Commit up to 50 candidates, reporting partial success honestly |
+| `/api/reader/direction` | GET, POST | Whether the optional cloud tier is configured; one direction per call when it is |
 | `/api/settlement` | GET, POST | The engine; the stamp, which writes a sealed settlement event |
 | `/api/export` | GET | Markdown, CSV or JSON statement, from one shared builder |
 | `/api/share` | POST | Mint an unguessable statement link |
@@ -306,6 +318,7 @@ ledger it is reading. That is a deliberate consequence of not asking anyone to s
 | `src/lib/money.ts` | Integer minor units and the largest-remainder split |
 | `src/lib/reader.ts` | The deterministic reader |
 | `src/lib/local-model.ts` | The in-browser open-weight model, and the Ollama probe |
+| `src/lib/cloud-model.ts` | The optional server-side cloud reader, its ceiling and its failure codes |
 | `src/lib/engine.ts` | `analyseSettlement` — balances, transfers, factors, flags |
 | `src/lib/integrity.ts` | Canonical JSON, SHA-384 sealing, replay |
 | `src/lib/fx.ts` | Live feeds, sealed fallback, provenance |
@@ -537,11 +550,11 @@ a ledger line.
 ```mermaid
 flowchart LR
   Push["push to main"] --> CI["GitHub Actions<br/>Node 22, npm ci"]
-  CI --> Gate["typecheck, lint,<br/>161 tests, build"]
+  CI --> Gate["typecheck, lint,<br/>181 tests, build"]
   Gate --> Deploy["Vercel production build"]
   Deploy --> Env["DATABASE_URL<br/>+ SITE_URL"]
   Env --> Health["/api/health must<br/>report neon-postgres"]
-  Health --> Verify["verify:live<br/>12-point proof"]
+  Health --> Verify["verify:live<br/>18-point proof"]
   Verify --> Repo["gh repo edit<br/>topics, homepage"]
 
   classDef infra fill:#94a3b8,stroke:#0f172a,color:#0f172a
@@ -570,6 +583,9 @@ npm run verify:live   # reads KHATA_BASE_URL, uses real HTTP, prints a pass/fail
   *You can hand it a screenshot of a conversation and get a ledger.*
 - [x] **The open model** — MobileBERT NLI in the browser, re-deciding only the directions rules
   were unsure about. *Your ambiguous lines get a second opinion without leaving your machine.*
+- [x] **The optional cloud tier** — a third reader behind a server-side key, for the lines neither
+  the rules nor the browser model could call, capped at 90% so it never presents as certainty.
+  *Off by default, and honest about it.*
 - [x] **Settlement** — the beam, the minimum-transfer plan, six audited factors.
   *You can send someone the shortest possible answer to "so what do I owe you?"*
 - [x] **Seals and replay** — per-line SHA-384 chains with a verify page that names a break.
