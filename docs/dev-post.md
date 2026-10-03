@@ -4,7 +4,7 @@
 
 khata reads the messages a shared home actually produces — a UPI SMS, a WhatsApp forward, the note on the back of a receipt — turns them into a real ledger, keeps the original text as evidence, works out the shortest way to settle up, and seals every change so the number can be **checked** instead of believed.
 
-**Live app:** https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app
+**Live app:** https://khata-ai.vercel.app
 **Source:** https://github.com/aniruddhaadak80/khata
 **Run it yourself in 60 seconds, no keys:** `git clone` → `npm install` → `npm run dev`
 

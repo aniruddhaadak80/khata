@@ -4,7 +4,7 @@
 
 Built for **Arunima Adak**, who shares a flat and loses the thread of who paid for what.
 
-[![Live app](https://img.shields.io/badge/live-vercel-131f3f?style=flat-square)](https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app)
+[![Live app](https://img.shields.io/badge/live-vercel-131f3f?style=flat-square)](https://khata-ai.vercel.app)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotog)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-34d399?style=flat-square)](LICENSE)
@@ -12,7 +12,7 @@ Built for **Arunima Adak**, who shares a flat and loses the thread of who paid f
 [![Agent](https://img.shields.io/badge/MCP-JSON--RPC%202.0-a78bfa?style=flat-square)](public/mcp.json)
 [![Open weights](https://img.shields.io/badge/model-MobileBERT%20NLI%20int8-in%20your%20browser-22d3ee?style=flat-square)](https://huggingface.co/Xenova/mobilebert-uncased-mnli)
 
-**[Live app](https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app) · [Source](https://github.com/aniruddhaadak80/khata) · [Agent endpoint](https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app/mcp.json) · [Issues](https://github.com/aniruddhaadak80/khata/issues)**
+**[Live app](https://khata-ai.vercel.app) · [Source](https://github.com/aniruddhaadak80/khata) · [Agent endpoint](https://khata-ai.vercel.app/mcp.json) · [Issues](https://github.com/aniruddhaadak80/khata/issues)**
 
 ---
 
@@ -224,7 +224,7 @@ curl -s "$BASE/api/export?format=csv" -o statement.csv
 ## 🤖 Agent interface
 
 Live MCP-style **JSON-RPC 2.0** over HTTP POST at
-[`POST /api/mcp`](https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app/api/mcp). Manifest:
+[`POST /api/mcp`](https://khata-ai.vercel.app/api/mcp). Manifest:
 [`public/mcp.json`](public/mcp.json).
 
 ```bash

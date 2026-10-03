@@ -15,7 +15,7 @@
       "version": "1.0.0",
       "transport": {
         "type": "streamable-http",
-        "url": "https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app/api/mcp"
+        "url": "https://khata-ai.vercel.app/api/mcp"
       },
       "runtimeHint": "nodejs",
       "environmentVariables": []
@@ -24,7 +24,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app/api/mcp"
+      "url": "https://khata-ai.vercel.app/api/mcp"
     }
   ],
   "tools": [

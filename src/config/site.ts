@@ -21,7 +21,7 @@ export const site = {
    * Canonical production origin. `SITE_URL` overrides it at build time so a
    * preview deployment does not advertise the production alias.
    */
-  url: process.env.SITE_URL?.replace(/\/$/, "") ?? "https://khata-dqj3kgz0n-aniruddha-adaks-projects.vercel.app",
+  url: process.env.SITE_URL?.replace(/\/$/, "") ?? "https://khata-ai.vercel.app",
 
   repo: {
     owner: "aniruddhaadak80",
