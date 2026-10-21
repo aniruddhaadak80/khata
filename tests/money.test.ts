@@ -34,6 +34,20 @@ describe("minor units", () => {
     expect(parseAmountToMinor("...", "INR")).toBeNull();
   });
 
+  it("keeps the sign of a negative amount instead of booking it as a positive one", () => {
+    expect(parseAmountToMinor("-50", "INR")).toBe(-5000);
+    expect(parseAmountToMinor("-240.50", "INR")).toBe(-24050);
+    expect(parseAmountToMinor("-1,240.50", "INR")).toBe(-124050);
+    expect(parseAmountToMinor("₹-50", "INR")).toBe(-5000);
+    expect(parseAmountToMinor("-1.2k", "INR")).toBe(-120000);
+    expect(parseAmountToMinor("-50/-", "INR")).toBe(-5000);
+  });
+
+  it("does not read the trailing /- of an Indian receipt as a sign", () => {
+    expect(parseAmountToMinor("240/-", "INR")).toBe(24000);
+    expect(parseAmountToMinor("1,240/-", "INR")).toBe(124000);
+  });
+
   it("converts between currencies at the supplied rate", () => {
     // 100 USD at 96.32 INR/USD is 9632 INR = 963200 paise.
     expect(convertMinor(10_000, "USD", "INR", 96.32)).toBe(963200);
