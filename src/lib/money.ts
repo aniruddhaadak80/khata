@@ -60,6 +60,10 @@ export function toMajor(minor: number, currency: string): number {
 /**
  * Parse a human amount like "1,240.50", "₹240", "1240" or "1.2k".
  * Returns null when the string is not an amount at all.
+ *
+ * A leading minus is a sign, not decoration: "-50" is fifty *less*. It is read before the
+ * digits are stripped, because the strip is there to remove currency symbols and the Indian
+ * "/-" notation, and neither of those may turn a credit into an expense.
  */
 export function parseAmountToMinor(raw: string, currency: string): number | null {
   const trimmed = raw.trim();
@@ -73,11 +77,15 @@ export function parseAmountToMinor(raw: string, currency: string): number | null
     body = suffix[1];
     multiplier = suffixChar.toLowerCase() === "k" ? 1_000 : 100_000;
   }
+  // A minus that comes before the first digit is the sign. The trailing "/-" of Indian
+  // receipts never reaches here: its digits come first, so it is not a sign.
+  const negative = /^[^\d]*-/.test(body);
   const cleaned = body.replace(/[^0-9.]/g, "");
   if (cleaned === "" || !/^[0-9]*\.?[0-9]*$/.test(cleaned) || cleaned === ".") return null;
   const value = Number.parseFloat(cleaned);
   if (!Number.isFinite(value)) return null;
-  return Math.round(value * multiplier * minorUnitFactor(currency));
+  const signed = negative ? -value : value;
+  return Math.round(signed * multiplier * minorUnitFactor(currency));
 }
 
 /**

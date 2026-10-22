@@ -76,6 +76,13 @@ describe("amounts", () => {
   it("returns null when there is no amount rather than returning zero", () => {
     expect(asNum(readSegment("the bill arrived", CTX), "amountMinor")).toBeNull();
   });
+
+  it("does not read a negative amount as a positive one", () => {
+    // A credit is not an expense. The amount parser keeps the sign, so the reader's
+    // "must be a positive amount" guard rejects it instead of booking the magnitude.
+    expect(asNum(readSegment("paid ₹-240.50 for rent", CTX), "amountMinor")).toBeNull();
+    expect(asNum(readSegment("paid -50 for cab", CTX), "amountMinor")).toBeNull();
+  });
 });
 
 describe("currency", () => {
